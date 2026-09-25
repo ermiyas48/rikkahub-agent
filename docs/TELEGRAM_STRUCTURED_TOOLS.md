@@ -8,7 +8,7 @@ RikkaHub Agent's Telegram bot only accepts **natural language**. Other agents/bo
 
 1. **Direct tool calls** over Telegram (`/tool`, JSON payloads)
 2. **Tool discovery** (`/tools`, `/tools schema <name>`)
-3. **Open allowlist**: acceptable chat ID `0` / `000` means accept any chat
+3. **Open allowlist**: whitelist contains `0` (or dedicated `allowAll`) → accept any chat/sender
 4. Optional **agent auth** (shared secret) for `/tool`
 5. Keep per-tool approval + HARDLINE safety
 
@@ -19,7 +19,7 @@ RikkaHub Agent's Telegram bot only accepts **natural language**. Other agents/bo
 | `/tools` | JSON list of enabled tools: `[{ "name", "description" }]` |
 | `/tools schema <name>` | JSON parameter schema for one tool |
 | `/tool <name> <json-args>` | Execute tool; reply with JSON result |
-| (optional) message body is pure JSON `{"tool","args"}` | Same as `/tool` |
+| (optional) pure JSON body `{"tool","args"}` | Same as `/tool` |
 
 ### Example
 
@@ -37,41 +37,66 @@ Reply:
 }
 ```
 
-## Open chat-id mode
+## Exact source map (fork master)
 
-- If configured allowed chat ID is `0`, `000`, empty with flag `allow_all=true`, or a dedicated setting **Open access**:
-  - Accept messages from **any** `chat.id`
-- Default: keep current allowlist behavior
-- Still enforce rate limits, approvals, HARDLINE
+| Concern | File |
+|---------|------|
+| Config (token, enabled, **whitelist**, defaultChatId) | `app/src/main/java/me/rerere/rikkahub/data/telegram/TelegramBotConfig.kt` |
+| DataStore persist whitelist as comma-separated Longs | `.../data/telegram/TelegramBotPreferences.kt` (`K_WHITELIST`, `parseWhitelist`) |
+| **Strict whitelist gate** (sender OR chatId must be in set; empty = nobody) | `.../service/TelegramBotService.kt` ~lines 575–581 and callback path ~1786 |
+| Built-in slash commands (no LLM) | `.../service/TelegramCommandHandlers.kt` (`handleBuiltInCommand`) |
+| Bot UI settings | `.../ui/pages/setting/SettingTelegramPage.kt` |
+| Local device tools registry | under `.../data/ai/tools/local/` (and related tool builders) |
+
+### Current whitelist logic (must change for open mode)
+
+```kotlin
+// TelegramBotService.handleIncoming — conceptual
+if (sender !in cfg.whitelist && m.chatId !in cfg.whitelist) {
+    // drop message
+}
+```
+
+**Proposed open mode:** if `0L in cfg.whitelist` **or** new `cfg.allowAll == true`, skip this reject.
+
+User request "acceptable chat id = 000" maps cleanly to putting **`0`** in the whitelist set (or a UI toggle that sets `allowAll`).
+
+### Where to add `/tools` and `/tool`
+
+In `TelegramCommandHandlers.handleBuiltInCommand` `when (cmd)`:
+
+- `/tools` → list enabled tools from the same registry the assistant uses; reply JSON
+- `/tool` → parse name + JSON args, run tool execute path, reply JSON
+
+Register names in `TelegramBotService.BUILT_IN_COMMANDS` so they appear in `/help` and BotFather menu refresh.
+
+## Open chat-id mode (detail)
+
+- **Option A (minimal):** treat `0` in whitelist as "allow all senders/chats"
+- **Option B:** add `allowAll: Boolean` to `TelegramBotConfig` + Settings toggle "Open access"
+- Keep rate limits, tool approval keyboards, HARDLINE
+- Document that open + direct `/tool` is high risk
 
 ## Auth (recommended)
 
-- Setting: `telegram.tool_api_token` (optional)
-- For `/tool` and `/tools schema` (mutating or all structured commands):
-  - Require header-like first line or arg: `token=<secret>`
-  - Or only allow structured tools from chats that previously registered with the token
+- Optional `toolApiToken` in config
+- Require `token=<secret>` on `/tool` (and optionally `/tools schema`) when set
 
-## Implementation sketch (Kotlin)
+## Implementation order
 
-1. Find Telegram inbound handler + allowlist check
-2. Special-case allowed id `0`/`000` → skip deny
-3. Parse commands before NLP path:
-   - If message starts with `/tools` or `/tool` → structured path
-   - Else → existing LLM chat path
-4. Structured path:
-   - Resolve tool from same registry as local agent
-   - Validate args against InputSchema
-   - Run approval gate if configured
-   - Execute, serialize result to JSON, send as Telegram text/document
-5. UI: settings for Open access + Tool API token
+1. Open mode (`0` in whitelist or `allowAll`) — small change in `TelegramBotService`
+2. `/tools` + `/tools schema` — discovery only, read-only
+3. `/tool` dispatch through existing tool execute + approval
+4. Settings UI + README security notes
+5. Optional shared secret
 
 ## Security
 
-- Open + direct tools is high risk; document in README
+- Open + direct tools is high risk; default remains strict whitelist
 - Mutating tools: keep Yes/No unless "trusted agent" mode
 - Never log bot token or tool API token
 
-## Alternatives if this is not implemented
+## Alternatives (already free, direct tools today)
 
 | Project | Direct tools? | Notes |
 |---------|---------------|-------|
@@ -81,6 +106,7 @@ Reply:
 
 ## Status
 
-- Fork: https://github.com/ermiyas48/rikkahub-agent
-- Upstream: https://github.com/ExTV/rikkahub-agent
-- Issues disabled on this fork; track work in this doc + PRs
+- **Fork:** https://github.com/ermiyas48/rikkahub-agent
+- **Upstream:** https://github.com/ExTV/rikkahub-agent
+- Issues disabled on this fork (upstream policy); track work in this doc + branches/PRs
+- Full Kotlin implementation of `/tool` needs Android Studio / local build; this doc is the implementation brief for Copilot or a PR
