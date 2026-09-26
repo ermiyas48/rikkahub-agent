@@ -77,10 +77,15 @@ jobs:
           distribution: temurin
           java-version: "21"
 
-      - name: Install bun (required by web-ui gradle task)
+      - name: Install bun
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
 
       - name: Configure Android SDK
         run: |
@@ -100,13 +105,11 @@ jobs:
           printf '%s\n' "84831b9409646a918e30573bab4c9c91346d8abd" \
             > "$ANDROID_HOME/licenses/android-sdk-preview-license"
           SM=$(find "$ANDROID_HOME" -name sdkmanager -type f 2>/dev/null | head -1 || true)
-          echo "sdkmanager=$SM"
           if [[ -n "$SM" ]]; then
             yes | "$SM" --licenses >/tmp/sdk-licenses.txt 2>&1 || true
             "$SM" --install "platform-tools" "platforms;android-35" "platforms;android-36" "platforms;android-37" "build-tools;35.0.0" || true
           fi
           echo "sdk.dir=$ANDROID_HOME" > local.properties
-          cat local.properties
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
@@ -114,9 +117,10 @@ jobs:
       - name: Build debug APK
         run: |
           set -eo pipefail
+          which bun pnpm java
           ./gradlew :app:assembleDebug --stacktrace --no-daemon
           echo "=== APK outputs ==="
-          find app/build/outputs -name '*.apk' -type f -print || true
+          find app/build/outputs -name '*.apk' -type f -print
         env:
           GRADLE_OPTS: "-Xmx4g -Dorg.gradle.daemon=false"
 
@@ -126,5 +130,4 @@ jobs:
           name: rikkahub-agent-debug-apk
           path: |
             app/build/outputs/apk/**/*.apk
-            **/build/outputs/apk/**/*.apk
           if-no-files-found: error
