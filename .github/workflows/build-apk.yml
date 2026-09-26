@@ -13,25 +13,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Apply Telegram open-access + tools patches
+      - name: Apply Telegram open-access + tools + panel patches
         run: |
           set -e
+          # Launcher name without resValue (AGP 9 rejects resValues feature when disabled)
+          sed -i 's/<string name="app_name">RikkaHub Agent<\/string>/<string name="app_name">RH Open Agent<\/string>/' app/src/main/res/values/strings.xml || true
           python3 << 'PY'
           from pathlib import Path
 
           h = Path("app/src/main/java/me/rerere/rikkahub/service/TelegramCommandHandlers.kt").read_text()
           old = '''        "/stream" -> { handleStreamCommand(m.chatId, arg); true }\n        else -> false'''
-          new = '''        "/stream" -> { handleStreamCommand(m.chatId, arg); true }\n        "/tools" -> { handleToolsCommand(m.chatId, arg); true }\n        "/tool" -> { handleToolCommand(m.chatId, arg); true }\n        else -> false'''
+          new = '''        "/stream" -> { handleStreamCommand(m.chatId, arg); true }\n        "/tools" -> { handleToolsCommand(m.chatId, arg); true }\n        "/tool" -> { handleToolCommand(m.chatId, arg); true }\n        "/panel" -> { handlePanelCommand(m.chatId, arg); true }\n        else -> false'''
           if old in h:
               h = h.replace(old, new, 1)
               print("handlers when: applied")
-          elif "/tools" in h:
+          elif "/panel" in h:
               print("handlers when: already present")
+          elif "/tools" in h and "/panel" not in h:
+              h = h.replace(
+                  '''        "/tool" -> { handleToolCommand(m.chatId, arg); true }\n        else -> false''',
+                  '''        "/tool" -> { handleToolCommand(m.chatId, arg); true }\n        "/panel" -> { handlePanelCommand(m.chatId, arg); true }\n        else -> false''',
+                  1,
+              )
+              print("handlers when: panel added")
           else:
               raise SystemExit("handlers when: pattern not found")
 
           old = '''        "stream" to "🖼️",\n    )'''
-          new = '''        "stream" to "🖼️",\n        "tools" to "🧰",\n        "tool" to "🔧",\n    )'''
+          new = '''        "stream" to "🖼️",\n        "tools" to "🧰",\n        "tool" to "🔧",\n        "panel" to "📱",\n    )'''
           if old in h:
               h = h.replace(old, new, 1)
               print("handlers icons: applied")
@@ -61,8 +70,25 @@ jobs:
               s = s.replace(old, new, 1)
               print("service callback: applied")
 
+          # Panel button callbacks
+          if "PANEL_CB_PREFIX" not in s and "pnl:" not in s:
+              needle = '''            cq.data.startsWith(CLARIFY_CB_PREFIX) -> {
+                handleClarifyCallback(cq); return
+            }'''
+              insert = '''            cq.data.startsWith(CLARIFY_CB_PREFIX) -> {
+                handleClarifyCallback(cq); return
+            }
+            cq.data.startsWith(PANEL_CB_PREFIX) -> {
+                handlePanelCallback(cq); return
+            }'''
+              if needle in s:
+                  s = s.replace(needle, insert, 1)
+                  print("service panel callback: applied")
+              else:
+                  print("service panel callback: pattern not found (skip)")
+
           old = '''            "stream" to "Show or toggle auto-streamed screenshots. Usage: /stream [on|off]",\n        )'''
-          new = '''            "stream" to "Show or toggle auto-streamed screenshots. Usage: /stream [on|off]",\n            "tools" to "JSON catalog of device tools. Usage: /tools or /tools schema <name>",\n            "tool" to "Run a device tool directly. Usage: /tool <name> <json-args>",\n        )'''
+          new = '''            "stream" to "Show or toggle auto-streamed screenshots. Usage: /stream [on|off]",\n            "tools" to "JSON catalog of device tools. Usage: /tools or /tools schema <name>",\n            "tool" to "Run a device tool directly. Usage: /tool <name> <json-args>",\n            "panel" to "Human control panel with buttons. Usage: /panel",\n        )'''
           if old in s:
               s = s.replace(old, new, 1)
               print("service commands: applied")
@@ -81,11 +107,6 @@ jobs:
         uses: oven-sh/setup-bun@v2
         with:
           bun-version: latest
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - name: Configure Android SDK
         run: |
@@ -117,7 +138,7 @@ jobs:
       - name: Build debug APK
         run: |
           set -eo pipefail
-          which bun pnpm java
+          which bun java
           ./gradlew :app:assembleDebug --stacktrace --no-daemon
           echo "=== APK outputs ==="
           find app/build/outputs -name '*.apk' -type f -print
