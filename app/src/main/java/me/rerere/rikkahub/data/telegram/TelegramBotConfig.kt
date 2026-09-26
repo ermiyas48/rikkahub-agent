@@ -6,7 +6,11 @@ data class TelegramBotConfig(
     val enabled: Boolean = false,
     /** Outbound default — used by telegram_send_message when chat_id is omitted. */
     val defaultChatId: Long? = null,
-    /** User/chat IDs allowed to talk to the bot. Empty == nobody. */
+    /**
+     * User/chat IDs allowed to talk to the bot. Empty == nobody.
+     * Special: if [OPEN_ACCESS_CHAT_ID] (0) is present, the bot accepts messages from
+     * any sender/chat (open mode). Put 0 in the whitelist UI to enable open access.
+     */
     val whitelist: Set<Long> = emptySet(),
     /** Stringified UUID of the assistant that handles inbound messages. Null == use the user's current assistant. */
     val assistantId: String? = null,
@@ -44,4 +48,16 @@ data class TelegramBotConfig(
     val proxyPassword: String = "",
 ) {
     val isUsable: Boolean get() = token.isNotBlank() && enabled
+
+    /**
+     * True when whitelist contains [OPEN_ACCESS_CHAT_ID] (0 / "000" in UI terms).
+     * Open mode still runs tool approvals and HARDLINE blocks; it only disables the
+     * sender/chat allowlist gate.
+     */
+    val isOpenAccess: Boolean get() = OPEN_ACCESS_CHAT_ID in whitelist
+
+    companion object {
+        /** Sentinel chat id meaning "allow any Telegram chat/sender". */
+        const val OPEN_ACCESS_CHAT_ID: Long = 0L
+    }
 }
