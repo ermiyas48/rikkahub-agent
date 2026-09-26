@@ -1,0 +1,24 @@
+Apply these three edits in TelegramCommandHandlers.kt and TelegramBotService.kt (also see docs/IMPLEMENTATION_OPEN_AND_TOOLS.md).
+
+1) handleBuiltInCommand when-branch — add:
+  "/tools" -> { handleToolsCommand(m.chatId, arg); true }
+  "/tool" -> { handleToolCommand(m.chatId, arg); true }
+
+2) help icons map — add:
+  "tools" to "🧰",
+  "tool" to "🔧",
+
+3) handleStatusCommand whitelistLabel:
+  when {
+    cfg?.isOpenAccess == true -> "OPEN (0 = allow all chats)"
+    whitelistCount == 1 -> "1 chat"
+    else -> "$whitelistCount chats"
+  }
+
+4) TelegramBotService handleIncoming + handleCallbackQuery:
+  if (!cfg.isOpenAccess && sender !in cfg.whitelist && ...)
+
+5) BUILT_IN_COMMANDS add tools and tool entries.
+
+TelegramAgentToolCommands.kt is already on this branch with handleToolsCommand / handleToolCommand.
+TelegramBotConfig.kt already has isOpenAccess and OPEN_ACCESS_CHAT_ID=0.
