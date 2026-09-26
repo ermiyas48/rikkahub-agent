@@ -16,7 +16,8 @@ android {
     compileSdk = 37
 
     defaultConfig {
-        // Distinct from stock ExTV RikkaHub Agent (excp.rikkahub) so both can install.
+        // Side-by-side with stock ExTV RikkaHub Agent (excp.rikkahub).
+        // Launcher label is patched in CI (strings.xml) — do not use resValue (AGP 9).
         applicationId = "excp.rikkahub.openagent"
         minSdk = 26
         targetSdk = 37
@@ -24,9 +25,6 @@ android {
         versionName = "2.5.1-open"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-
-        // Requires buildFeatures.resValues = true (AGP disables by default in some setups).
-        resValue("string", "app_name", "RH Open Agent")
 
         ndk {
             abiFilters += listOf("arm64-v8a", "x86_64")
@@ -103,7 +101,6 @@ android {
         compose = true
         buildConfig = true
         aidl = true
-        resValues = true
     }
     sourceSets {
         getByName("androidTest").assets.directories.add("$projectDir/schemas")
