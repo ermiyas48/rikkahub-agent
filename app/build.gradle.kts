@@ -25,7 +25,7 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
-        // Override launcher label without rewriting all locale string files.
+        // Requires buildFeatures.resValues = true (AGP disables by default in some setups).
         resValue("string", "app_name", "RH Open Agent")
 
         ndk {
@@ -103,6 +103,7 @@ android {
         compose = true
         buildConfig = true
         aidl = true
+        resValues = true
     }
     sourceSets {
         getByName("androidTest").assets.directories.add("$projectDir/schemas")
