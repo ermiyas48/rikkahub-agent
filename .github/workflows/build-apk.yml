@@ -16,8 +16,6 @@ jobs:
       - name: Apply Telegram open-access + tools patches
         run: |
           set -e
-          H=app/src/main/java/me/rerere/rikkahub/service/TelegramCommandHandlers.kt
-          S=app/src/main/java/me/rerere/rikkahub/service/TelegramBotService.kt
           python3 << 'PY'
           from pathlib import Path
 
@@ -81,6 +79,14 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools platforms;android-37 platforms;android-36 platforms;android-35 build-tools;35.0.0 cmdline-tools;latest
+          log-accepted-android-sdk-licenses: true
+
+      - name: Accept Android licenses
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager --install "platforms;android-37" "platforms;android-36" "build-tools;35.0.0" "platform-tools" || true
 
       - name: Grant execute permission for gradlew
         run: chmod +x gradlew
