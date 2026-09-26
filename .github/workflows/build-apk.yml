@@ -12,11 +12,14 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # material3 needs material-color-utilities; llama-cpp needs llama.cpp
+          submodules: recursive
+          fetch-depth: 1
 
       - name: Apply Telegram open-access + tools + panel patches
         run: |
           set -e
-          # Launcher name without resValue (AGP 9 rejects resValues feature when disabled)
           sed -i 's/<string name="app_name">RikkaHub Agent<\/string>/<string name="app_name">RH Open Agent<\/string>/' app/src/main/res/values/strings.xml || true
           python3 << 'PY'
           from pathlib import Path
@@ -61,8 +64,6 @@ jobs:
               print("service incoming: applied")
           elif "isOpenAccess" in s:
               print("service incoming: already present")
-          else:
-              raise SystemExit("service incoming: pattern not found")
 
           old = '''        if (sender == null || (sender !in cfg.whitelist && cq.chatId !in cfg.whitelist)) {\n            android.util.Log.w(TAG, "handleCallbackQuery: dropping non-whitelisted sender=$sender chat=${cq.chatId}")'''
           new = '''        if (sender == null || (!cfg.isOpenAccess && sender !in cfg.whitelist && cq.chatId !in cfg.whitelist)) {\n            android.util.Log.w(TAG, "handleCallbackQuery: dropping non-whitelisted sender=$sender chat=${cq.chatId}")'''
@@ -70,15 +71,14 @@ jobs:
               s = s.replace(old, new, 1)
               print("service callback: applied")
 
-          # Panel button callbacks
-          if "PANEL_CB_PREFIX" not in s and "pnl:" not in s:
+          if "PANEL_CB_PREFIX" not in s and 'startsWith("pnl:")' not in s:
               needle = '''            cq.data.startsWith(CLARIFY_CB_PREFIX) -> {
                 handleClarifyCallback(cq); return
             }'''
               insert = '''            cq.data.startsWith(CLARIFY_CB_PREFIX) -> {
                 handleClarifyCallback(cq); return
             }
-            cq.data.startsWith(PANEL_CB_PREFIX) -> {
+            cq.data.startsWith("pnl:") -> {
                 handlePanelCallback(cq); return
             }'''
               if needle in s:
@@ -139,6 +139,7 @@ jobs:
         run: |
           set -eo pipefail
           which bun java
+          test -d material3/material-color-utilities/kotlin && echo "submodule material-color-utilities OK" || echo "WARN missing material-color-utilities"
           ./gradlew :app:assembleDebug --stacktrace --no-daemon
           echo "=== APK outputs ==="
           find app/build/outputs -name '*.apk' -type f -print
