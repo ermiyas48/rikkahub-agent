@@ -1,0 +1,30 @@
+--- a/TelegramBotService.kt
++++ b/TelegramBotService.kt
+@@ -577,7 +577,8 @@
+         // that matches the UI's "Empty = nobody" promise. Without this, a freshly-enabled
+         // bot whose owner forgot to fill in the whitelist would happily accept messages
+         // from any random Telegram user who knows the bot's @username.
+-        if (sender !in cfg.whitelist && m.chatId !in cfg.whitelist) {
++        // Open mode: whitelist contains 0 (OPEN_ACCESS_CHAT_ID) → accept any sender/chat.
++        if (!cfg.isOpenAccess && sender !in cfg.whitelist && m.chatId !in cfg.whitelist) {
+             android.util.Log.w(TAG, "handleIncoming: dropping — sender=$sender chat=${m.chatId} not in whitelist=${cfg.whitelist}")
+             // Stash the rejected sender so the foreground notification + UI can surface it.
+             // First-time setup needs SOME way to discover the user's own chat_id, since
+@@ -1783,7 +1784,7 @@
+         val cbStartMs = System.currentTimeMillis()
+         android.util.Log.i(TAG, "cb:${cq.callbackQueryId} START data=${cq.data} chat=${cq.chatId}")
+         val sender = cq.senderId
+-        if (sender == null || (sender !in cfg.whitelist && cq.chatId !in cfg.whitelist)) {
++        if (sender == null || (!cfg.isOpenAccess && sender !in cfg.whitelist && cq.chatId !in cfg.whitelist)) {
+             android.util.Log.w(TAG, "handleCallbackQuery: dropping non-whitelisted sender=$sender chat=${cq.chatId}")
+             // ALWAYS ack, even when dropping. Spec requires answerCallbackQuery within
+             // ~15 s or Telegram resends the tap multiple times — without this ack the
+@@ -2151,6 +2152,8 @@
+             "ratelimit" to "Show or set the assistant's max output tokens. Usage: /ratelimit [number|clear]",
+             "doctor" to "Run app diagnostics — perms, services, DB, network, Termux",
+             "stream" to "Show or toggle auto-streamed screenshots. Usage: /stream [on|off]",
++            "tools" to "JSON catalog of device tools. Usage: /tools or /tools schema <name>",
++            "tool" to "Run a device tool directly. Usage: /tool <name> <json-args>",
+         )
+ 
+         /** Set whenever the service is alive AND its long-poll loop is running. */

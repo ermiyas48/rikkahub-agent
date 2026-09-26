@@ -1,0 +1,33 @@
+--- a/TelegramCommandHandlers.kt
++++ b/TelegramCommandHandlers.kt
+@@ -67,6 +67,8 @@
+         "/ratelimit" -> { handleRateLimitCommand(m.chatId, arg); true }
+         "/doctor" -> { handleDoctorCommand(m.chatId); true }
+         "/stream" -> { handleStreamCommand(m.chatId, arg); true }
++        "/tools" -> { handleToolsCommand(m.chatId, arg); true }
++        "/tool" -> { handleToolCommand(m.chatId, arg); true }
+         else -> false
+     }
+     if (handled) {
+@@ -108,6 +110,8 @@
+         "ratelimit" to "⚡",
+         "doctor" to "🩺",
+         "stream" to "🖼️",
++        "tools" to "🧰",
++        "tool" to "🔧",
+     )
+     val msg = buildString {
+         appendLine("📖 Built-in commands (handled by the app, no LLM cost):")
+@@ -244,7 +248,11 @@
+     val tokenLabel = assistant.maxTokens?.let { "$it tokens" } ?: "provider default"
+     val cfg = cfgSafe()
+     val whitelistCount = cfg?.whitelist?.size ?: 0
+-    val whitelistLabel = if (whitelistCount == 1) "1 chat" else "$whitelistCount chats"
++    val whitelistLabel = when {
++        cfg?.isOpenAccess == true -> "OPEN (0 = allow all chats)"
++        whitelistCount == 1 -> "1 chat"
++        else -> "$whitelistCount chats"
++    }
+ 
+     val msg = buildString {
+         appendLine("📊 RikkaHub agent status")
