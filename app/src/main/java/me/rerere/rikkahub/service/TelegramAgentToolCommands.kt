@@ -1,14 +1,11 @@
 package me.rerere.rikkahub.service
 
 import android.util.Log
-import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import me.rerere.ai.core.Tool
 import me.rerere.ai.ui.UIMessagePart
@@ -36,8 +33,8 @@ private suspend fun TelegramBotService.resolveLiveTools(): Pair<List<Tool>, Stri
         Log.w(TAG, "resolveLiveTools: LocalTools not in Koin", e)
         return emptyList<Tool>() to "LocalTools unavailable: ${e.message}"
     }
-    val settings = settingsStore.settingsFlow.first()
-    val cfg = prefs.config()
+    val settings = settingsStore.settingsFlow.value
+    val cfg = prefs.current()
     val assistant = when {
         !cfg.assistantId.isNullOrBlank() -> {
             val id = runCatching { Uuid.parse(cfg.assistantId!!) }.getOrNull()
@@ -91,7 +88,6 @@ internal suspend fun TelegramBotService.handleToolsCommand(chatId: Long, arg: St
             client.sendMessage(chatId, json.toString())
             return
         }
-        // Prefer live list; fall back to static catalog names if assistant has zero tools on.
         val listed = if (tools.isNotEmpty()) {
             tools.map { it.name to it.description.take(120) }
         } else {
@@ -182,7 +178,6 @@ internal suspend fun TelegramBotService.handleToolCommand(chatId: Long, arg: Str
             return
         }
 
-        // Direct execute — same callable the ChatService tool loop uses.
         val parts = tool.execute(input)
         val resultText = parts.joinToString("\n") { part ->
             when (part) {
@@ -191,7 +186,6 @@ internal suspend fun TelegramBotService.handleToolCommand(chatId: Long, arg: Str
             }
         }.ifBlank { "{\"ok\":true}" }
 
-        // Prefer embedding raw tool JSON if it already looks like JSON.
         val body = try {
             val el = toolJson.parseToJsonElement(resultText)
             buildJsonObject {
@@ -209,7 +203,6 @@ internal suspend fun TelegramBotService.handleToolCommand(chatId: Long, arg: Str
             }.toString()
         }
 
-        // Telegram message limit ~4096; truncate safely.
         client.sendMessage(chatId, body.take(4000))
     } catch (e: Throwable) {
         Log.w(TAG, "handleToolCommand direct execute failed name=$name", e)
@@ -222,10 +215,7 @@ internal suspend fun TelegramBotService.handleToolCommand(chatId: Long, arg: Str
     }
 }
 
-/**
- * Static fallback catalog (names match real Tool.name values). Used only when the
- * assistant has no local tools enabled yet so discovery still teaches callers the API.
- */
+/** Static fallback when assistant has no local tools enabled. */
 internal val TELEGRAM_TOOL_CATALOG: List<Pair<String, String>> = listOf(
     "get_battery_status" to "Battery percent, charging, temperature",
     "get_audio_info" to "Audio mode, headphones, ringer",
@@ -261,7 +251,6 @@ internal val TELEGRAM_TOOL_CATALOG: List<Pair<String, String>> = listOf(
     "web_fetch" to "Fetch a URL",
     "web_extract" to "Extract article text",
     "eval_javascript" to "Run JS in sandbox",
-    // Shell / elevated
     "termux_run_command" to "Run a command in Termux (stdout/stderr/exit). Needs Termux + allow-external-apps",
     "shizuku_exec" to "Run shell via Shizuku (ADB-level privileges)",
     "workspace_run" to "Run command in Linux workspace",
